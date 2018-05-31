@@ -1,72 +1,50 @@
-﻿using Sandbox.Engine.Graphics;
-using SharpDX;
-using System;
+﻿using System;
 using System.Threading;
+using Sandbox.Engine.Graphics;
 
 namespace Sandbox.Engine
 {
 	public class Engine
 	{
 		public Video Video { get; private set; }
+		public Input Input { get; private set; }
 
-		public Engine()
+		string title = string.Empty;
+
+		public Engine(string title = "Main WIndow")
 		{
-			Video = new Video();
-		}
+			this.title = title;
+			Video = new Video(this.title);
+			Input = new Input();
 
+			Input.MouseButtonDown += (sender, e) =>
+			{
+				Video.MouseInput(e.Button, e.Pressed);
+			};
+
+			Input.MouseScroll += (sender, e) =>
+			{
+				Video.MouseInput(e.Delta);
+			};
+
+			Input.MousePosition += (sender, e) =>
+			{
+				Video.MouseInput(e.X, e.Y);
+			};
+		}
 		public bool Initialize()
 		{
-			var cube = new Vector4[] {
-			// POSITION								// COLOR
-			new Vector4(-1.0f, -1.0f, -1.0f, 1.0f), new Vector4(1.0f, 0.0f, 0.0f, 1.0f), // Front
-            new Vector4(-1.0f,  1.0f, -1.0f, 1.0f), new Vector4(1.0f, 0.0f, 0.0f, 1.0f),
-			new Vector4( 1.0f,  1.0f, -1.0f, 1.0f), new Vector4(1.0f, 0.0f, 0.0f, 1.0f),
-			new Vector4(-1.0f, -1.0f, -1.0f, 1.0f), new Vector4(1.0f, 0.0f, 0.0f, 1.0f),
-			new Vector4( 1.0f,  1.0f, -1.0f, 1.0f), new Vector4(1.0f, 0.0f, 0.0f, 1.0f),
-			new Vector4( 1.0f, -1.0f, -1.0f, 1.0f), new Vector4(1.0f, 0.0f, 0.0f, 1.0f),
-
-			new Vector4(-1.0f, -1.0f,  1.0f, 1.0f), new Vector4(0.0f, 1.0f, 0.0f, 1.0f), // BACK
-            new Vector4( 1.0f,  1.0f,  1.0f, 1.0f), new Vector4(0.0f, 1.0f, 0.0f, 1.0f),
-			new Vector4(-1.0f,  1.0f,  1.0f, 1.0f), new Vector4(0.0f, 1.0f, 0.0f, 1.0f),
-			new Vector4(-1.0f, -1.0f,  1.0f, 1.0f), new Vector4(0.0f, 1.0f, 0.0f, 1.0f),
-			new Vector4( 1.0f, -1.0f,  1.0f, 1.0f), new Vector4(0.0f, 1.0f, 0.0f, 1.0f),
-			new Vector4( 1.0f,  1.0f,  1.0f, 1.0f), new Vector4(0.0f, 1.0f, 0.0f, 1.0f),
-
-			new Vector4(-1.0f, 1.0f, -1.0f,  1.0f), new Vector4(0.0f, 0.0f, 1.0f, 1.0f), // Top
-            new Vector4(-1.0f, 1.0f,  1.0f,  1.0f), new Vector4(0.0f, 0.0f, 1.0f, 1.0f),
-			new Vector4( 1.0f, 1.0f,  1.0f,  1.0f), new Vector4(0.0f, 0.0f, 1.0f, 1.0f),
-			new Vector4(-1.0f, 1.0f, -1.0f,  1.0f), new Vector4(0.0f, 0.0f, 1.0f, 1.0f),
-			new Vector4( 1.0f, 1.0f,  1.0f,  1.0f), new Vector4(0.0f, 0.0f, 1.0f, 1.0f),
-			new Vector4( 1.0f, 1.0f, -1.0f,  1.0f), new Vector4(0.0f, 0.0f, 1.0f, 1.0f),
-
-			new Vector4(-1.0f,-1.0f, -1.0f,  1.0f), new Vector4(1.0f, 1.0f, 0.0f, 1.0f), // Bottom
-            new Vector4( 1.0f,-1.0f,  1.0f,  1.0f), new Vector4(1.0f, 1.0f, 0.0f, 1.0f),
-			new Vector4(-1.0f,-1.0f,  1.0f,  1.0f), new Vector4(1.0f, 1.0f, 0.0f, 1.0f),
-			new Vector4(-1.0f,-1.0f, -1.0f,  1.0f), new Vector4(1.0f, 1.0f, 0.0f, 1.0f),
-			new Vector4( 1.0f,-1.0f, -1.0f,  1.0f), new Vector4(1.0f, 1.0f, 0.0f, 1.0f),
-			new Vector4( 1.0f,-1.0f,  1.0f,  1.0f), new Vector4(1.0f, 1.0f, 0.0f, 1.0f),
-
-			new Vector4(-1.0f, -1.0f, -1.0f, 1.0f), new Vector4(1.0f, 0.0f, 1.0f, 1.0f), // Left
-            new Vector4(-1.0f, -1.0f,  1.0f, 1.0f), new Vector4(1.0f, 0.0f, 1.0f, 1.0f),
-			new Vector4(-1.0f,  1.0f,  1.0f, 1.0f), new Vector4(1.0f, 0.0f, 1.0f, 1.0f),
-			new Vector4(-1.0f, -1.0f, -1.0f, 1.0f), new Vector4(1.0f, 0.0f, 1.0f, 1.0f),
-			new Vector4(-1.0f,  1.0f,  1.0f, 1.0f), new Vector4(1.0f, 0.0f, 1.0f, 1.0f),
-			new Vector4(-1.0f,  1.0f, -1.0f, 1.0f), new Vector4(1.0f, 0.0f, 1.0f, 1.0f),
-
-			new Vector4( 1.0f, -1.0f, -1.0f, 1.0f), new Vector4(0.0f, 1.0f, 1.0f, 1.0f), // Right
-            new Vector4( 1.0f,  1.0f,  1.0f, 1.0f), new Vector4(0.0f, 1.0f, 1.0f, 1.0f),
-			new Vector4( 1.0f, -1.0f,  1.0f, 1.0f), new Vector4(0.0f, 1.0f, 1.0f, 1.0f),
-			new Vector4( 1.0f, -1.0f, -1.0f, 1.0f), new Vector4(0.0f, 1.0f, 1.0f, 1.0f),
-			new Vector4( 1.0f,  1.0f, -1.0f, 1.0f), new Vector4(0.0f, 1.0f, 1.0f, 1.0f),
-			new Vector4( 1.0f, 1.0f, 1.0f, 1.0f), new Vector4(0.0f, 1.0f, 1.0f, 1.0f),
-			};
-			
-			if (!Video.Initialize(ref cube))
+			if (!Video.Initialize())
 			{
-				Video.MessageBox(IntPtr.Zero, "Window creation failed!", "Critical Error", (uint)0x00000010L);
+				Video.MessageBox("Video initialization failed!", title);
 				return false;
 			}
 
+			if (!Input.Initialize())
+			{
+				Video.MessageBox("Input initialization failed!", title);
+				return false;
+			}
 			return true;
 		}
 
@@ -74,6 +52,8 @@ namespace Sandbox.Engine
 		{
 			if (!Initialize())
 				return;
+
+			GC.Collect();
 
 			while ((uint)Video.WindowEvent.WM_QUIT != Video.msg.message)
 			{
@@ -84,13 +64,21 @@ namespace Sandbox.Engine
 				}
 				else
 				{
-					Video.BeginRender();
-
+					Video.Update();
+					Video.BeginRender(SharpDX.Color.Black);
 					Video.EndRender();
 
 					Thread.Sleep(1);
 				}
 			}
+		}
+
+
+
+		public void Dispose()
+		{
+			Input.Dispose();
+			Video.Dispose();
 		}
 	}
 }
