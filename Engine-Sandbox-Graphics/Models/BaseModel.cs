@@ -31,7 +31,9 @@ namespace Sandbox.Engine.Models
 			{
 				[#PREFIX#]_PS_IN output = ([#PREFIX#]_PS_IN)0;
 				input.pos.w = 1.0f;
+				input.pos.y = round(max(min(input.col.r * 255.0f, input.col.g * 255.0f), -input.col.b * 255.0f) / 15.0f -10.0f);
 
+				output.nrm = input.nrm;
 				output.pos = mul(input.pos, worldMatrix);
 				output.col = input.col;
 				
