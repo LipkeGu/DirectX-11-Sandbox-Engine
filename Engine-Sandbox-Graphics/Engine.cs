@@ -14,6 +14,7 @@ namespace Sandbox.Engine
 		public Engine(string title = "Main WIndow")
 		{
 			this.title = title;
+
 			Video = new Video(this.title);
 			Input = new Input();
 
@@ -32,6 +33,7 @@ namespace Sandbox.Engine
 				Video.MouseInput(e.X, e.Y);
 			};
 		}
+
 		public bool Initialize()
 		{
 			if (!Video.Initialize())
@@ -45,6 +47,7 @@ namespace Sandbox.Engine
 				Video.MessageBox("Input initialization failed!", title);
 				return false;
 			}
+
 			return true;
 		}
 
@@ -65,15 +68,13 @@ namespace Sandbox.Engine
 				else
 				{
 					Video.Update();
-					Video.BeginRender(SharpDX.Color.Black);
+					Video.BeginRender();
 					Video.EndRender();
 
 					Thread.Sleep(1);
 				}
 			}
 		}
-
-
 
 		public void Dispose()
 		{

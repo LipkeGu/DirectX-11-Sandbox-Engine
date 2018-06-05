@@ -1,5 +1,5 @@
-﻿using SharpDX;
-using SharpDX.Mathematics.Interop;
+﻿using Sandbox.Engine.Graphics;
+using SharpDX;
 using System;
 using System.Diagnostics;
 
@@ -18,10 +18,24 @@ namespace Sandbox.Engine
 			if (Debugger.IsAttached)
 			{
 				Debug.Print(message);
+
 				if (waitForInteraction)
 					Debugger.Break();
 			}
+		}
 
+		private static void PickingTriangle(Vector2 mouseLocation)
+		{
+			var near = new Vector3(mouseLocation.X, mouseLocation.Y, 0);
+			var far = new Vector3(mouseLocation.X, mouseLocation.Y, ushort.MaxValue);
+
+			Vector3.Unproject(near, Video.ViewPort.X, Video.ViewPort.Y,
+				Video.ViewPort.Width, Video.ViewPort.Height, Video.ViewPort.MinDepth,
+					Video.ViewPort.MaxDepth, Video.WorldMatrix);
+
+			Vector3.Unproject(far, Video.ViewPort.X, Video.ViewPort.Y,
+				Video.ViewPort.Width, Video.ViewPort.Height, Video.ViewPort.MinDepth,
+					Video.ViewPort.MaxDepth, Video.WorldMatrix);
 		}
 	}
 }

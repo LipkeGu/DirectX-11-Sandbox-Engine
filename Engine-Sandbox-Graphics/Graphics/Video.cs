@@ -3,15 +3,21 @@
 using SharpDX;
 using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
+using SharpDX.DirectInput;
 using SharpDX.DXGI;
+
 using System;
 using System.Runtime.InteropServices;
+
+using Device = SharpDX.Direct3D11.Device;
+using Device1 = SharpDX.Direct3D11.Device1;
 
 namespace Sandbox.Engine.Graphics
 {
 	public class Video : IDisposable
 	{
 		#region "DLL Imports"
+		
 		[DllImport("user32.dll", EntryPoint = "BeginPaint")]
 		public static extern IntPtr BeginPaint([In] IntPtr hWnd, ref PAINTSTRUCT lpPaint);
 
@@ -121,9 +127,6 @@ namespace Sandbox.Engine.Graphics
 
 		public static void MessageBox(string message, string title, uint flags = (uint)0x00000010L)
 		{
-#if DEBUG
-			Functions.LOG(message, flags == (uint)0x00000010L);
-#endif
 			_MsgeBox(IntPtr.Zero, message, title, flags);
 		}
 
@@ -235,7 +238,13 @@ namespace Sandbox.Engine.Graphics
 			// Mittlere Maustaste
 			WM_MBUTTONDOWN = 0x0207,
 			WM_MBUTTONUP = 0x0208,
-			WM_MBUTTONDBLCLK = 0x0209
+			WM_MBUTTONDBLCLK = 0x0209,
+
+			WM_KILLFOCUS = 0x0008,
+			WM_SETFOCUS = 0x0007,
+			WM_MOUSELEAVE = 0x02A3,
+			WM_MOUSEHOVER = 0x02A1,
+
 		}
 		#endregion
 
@@ -248,10 +257,8 @@ namespace Sandbox.Engine.Graphics
 		private long windowStyle = 0x00000000L | 0x20000000L | 0x00080000L
 			| 0x00C00000L | 0x00020000L | 0x00040000L;
 
-		private static System.Drawing.Point cursorPosition;
-		private static System.Drawing.Point lastCursorPosition;
+		public static Vector2 CursorPosition { get; private set; }
 
-		static Vector3 position;
 		static Vector3 up = new Vector3(0, 1, 0);
 		static Vector3 lookAt;
 
@@ -260,31 +267,54 @@ namespace Sandbox.Engine.Graphics
 		static float movespeed = 10.07f;
 		static float turnspeed = (float)(0.5f / (Math.PI * 10));
 
-		static Vector2 rotation = new Vector2(0.0f, 0.9f);
+		public static Vector2 Rotation = new Vector2(0.0f, 0.9f);
 
+		#region "Renderer Settings"
 		public static FillMode FillMode { get; set; } = FillMode.Solid;
 
+		public static CullMode Culling { get; private set; } = CullMode.Front;
+
+		public static bool Antialiased { get; private set; } = false;
+
+		public static bool Multisampling { get; private set; } = false;
+
+		public static bool DepthClip { get; private set; } = false;
+
+		public static bool Scissoring { get; private set; } = false;
+		#endregion
+
 		public static Matrix ViewMatrix { get; private set; }
+
+		public static Matrix WorldMatrix { get; private set; }
 
 		public static Matrix ProjectionMatrix { get; private set; }
 		public MSG msg;
 
 		string classname = "mainwindow";
 
+		public delegate void CloseEventHandler(object sender, EventArgs e);
+		public static event CloseEventHandler CloseRequested;
+
+		public delegate void ResizeEventHandler(object sender, EventArgs e);
+		public static event ResizeEventHandler Resize;
 
 		public static bool MiddleMousePressed { get; private set; }
-		
+		public static bool LeftShiftKeyPressed { get; private set; }
+		public static bool CursorOverClientArea { get; private set; }
+
 		public static int Width;
 		public static int Height;
-		public static Viewport ViewPort { get; set; }
+		public static Viewport ViewPort { get; private set; }
+		public static Color ClearColor { get; set; } = new Color(96, 96, 96, 1);
 
 		public IntPtr HWnd { get; private set; } = IntPtr.Zero;
 		public static SharpDX.Direct3D11.Device GraphicDevice { get; private set; }
-		public static DeviceContext DeviceContext { get; private set; }
-		public SwapChain SwapChain { get; private set; }
+		public static SharpDX.Direct3D11.DeviceContext DeviceContext { get; private set; }
+		public static SwapChain SwapChain { get; private set; }
+		public static Vector3 Position;
 
 		DepthStencilView depthStencilView;
-		RenderTargetView renderview;
+		public static RenderTargetView RenderView { get; private set; }
 		string title = string.Empty;
 
 		public Video(string title)
@@ -296,7 +326,7 @@ namespace Sandbox.Engine.Graphics
 			{
 				BufferCount = 2,
 				ModeDescription = new ModeDescription(Width, Height, new Rational(60, 1), Format.R8G8B8A8_UNorm),
-				IsWindowed = true,
+				IsWindowed = false,
 				OutputHandle = HWnd,
 				SampleDescription = new SampleDescription(1, 0),
 				SwapEffect = SwapEffect.Discard,
@@ -304,10 +334,10 @@ namespace Sandbox.Engine.Graphics
 				Flags = SwapChainFlags.AllowModeSwitch
 			};
 
-			var features = new FeatureLevel[] { FeatureLevel.Level_10_1, FeatureLevel.Level_11_0, FeatureLevel.Level_11_1};
-			
+			var features = new FeatureLevel[] { FeatureLevel.Level_10_1, FeatureLevel.Level_11_0, FeatureLevel.Level_11_1 };
+
 			SharpDX.Direct3D11.Device.CreateWithSwapChain(DriverType.Hardware,
-				DeviceCreationFlags.None, features, swapchainDesc, out var dev, out var swapChain);
+				DeviceCreationFlags.Debug, features, swapchainDesc, out var dev, out var swapChain);
 
 			SwapChain = swapChain;
 			SwapChain.ResizeBuffers(swapchainDesc.BufferCount, Width, Height, Format.Unknown, SwapChainFlags.None);
@@ -315,9 +345,11 @@ namespace Sandbox.Engine.Graphics
 			GraphicDevice = (SharpDX.Direct3D11.Device)dev;
 			DeviceContext = GraphicDevice.ImmediateContext;
 
+			SwapChain.SetFullscreenState(true, null);
+
 			ViewPort = new Viewport(0, 0, Width, Height, 0.1f, 1.0f);
 		}
-		
+
 		/// <summary>
 		/// Initialize basic Window and Rendering environment. 
 		/// </summary>
@@ -360,14 +392,27 @@ namespace Sandbox.Engine.Graphics
 
 			Width = (int)(surface.Right - surface.Left);
 			Height = (int)(surface.Bottom - surface.Top);
+
+			Resize += (sender, e) =>
+			{
+				surface.Left = 0;
+				surface.Right = (uint)Width;
+				surface.Top = 0;
+				surface.Bottom = (uint)Height;
+
+				Width = (int)(surface.Right - surface.Left);
+				Height = (int)(surface.Bottom - surface.Top);
+
+				ViewPort = new Viewport(0, 0, Width, Height, 0.1f, 1.0f);
+			};
 			#endregion
 
 			#region "Direct3D Inizialization"
 
 			CreateDeviceSwapChainAndContext();
-			
+
 			using (var backbuffer = SharpDX.Direct3D11.Resource.FromSwapChain<Texture2D>(SwapChain, 0))
-				renderview = new RenderTargetView(GraphicDevice, backbuffer);
+				RenderView = new RenderTargetView(GraphicDevice, backbuffer);
 
 			#region "Depth & STencil Buffer"
 			var depthBuffer = new Texture2D(GraphicDevice, new Texture2DDescription()
@@ -392,69 +437,68 @@ namespace Sandbox.Engine.Graphics
 				: DepthStencilViewDimension.Texture2D
 			});
 
-		
 
-			DeviceContext.OutputMerger.SetTargets(depthStencilView, renderview);
+			DeviceContext.OutputMerger.SetTargets(depthStencilView, RenderView);
 			DeviceContext.OutputMerger.DepthStencilState = new DepthStencilState(GraphicDevice,
 				new DepthStencilStateDescription
-			{
-				IsDepthEnabled = true,
-				DepthComparison = Comparison.LessEqual,
-				DepthWriteMask = DepthWriteMask.All,
-				IsStencilEnabled = true,
-				StencilReadMask = 0xff,
-				StencilWriteMask = 0xff,
-				FrontFace = new DepthStencilOperationDescription
 				{
-					Comparison = Comparison.LessEqual,
-					PassOperation = StencilOperation.Keep,
-					FailOperation = StencilOperation.Keep,
-					DepthFailOperation = StencilOperation.Increment
-				},
-				BackFace = new DepthStencilOperationDescription
-				{
-					Comparison = Comparison.LessEqual,
-					PassOperation = StencilOperation.Keep,
-					FailOperation = StencilOperation.Keep,
-					DepthFailOperation = StencilOperation.Decrement
-				}
-
-
-			});
+					IsDepthEnabled = true,
+					DepthComparison = Comparison.LessEqual,
+					DepthWriteMask = DepthWriteMask.All,
+					IsStencilEnabled = true,
+					StencilReadMask = 0xff,
+					StencilWriteMask = 0xff,
+					FrontFace = new DepthStencilOperationDescription
+					{
+						Comparison = Comparison.LessEqual,
+						PassOperation = StencilOperation.Keep,
+						FailOperation = StencilOperation.Keep,
+						DepthFailOperation = StencilOperation.Increment
+					},
+					BackFace = new DepthStencilOperationDescription
+					{
+						Comparison = Comparison.LessEqual,
+						PassOperation = StencilOperation.Keep,
+						FailOperation = StencilOperation.Keep,
+						DepthFailOperation = StencilOperation.Decrement
+					}
+				});
 
 			#endregion
 
 			#endregion
+
 			floor = new Plate();
-
+			Position = new Vector3(Plate.MapSize.X / 2, Plate.MapSize.Z / 2, Plate.MapSize.Y / 2);
 			ShowWindow(HWnd, 1);
 
 			return true;
 		}
 
-		public void BeginRender(SharpDX.Color clearcolor)
+		public void BeginRender()
 		{
 			using (var rasterizerState = new RasterizerState(GraphicDevice, new RasterizerStateDescription()
 			{
-				CullMode = CullMode.Front,
+				CullMode = Culling,
 				FillMode = FillMode,
 				IsFrontCounterClockwise = false,
-				DepthBias = 0,
+				DepthBias = 1 / ushort.MaxValue,
 				SlopeScaledDepthBias = 0.0f,
-				DepthBiasClamp = 0.0f,
-				IsDepthClipEnabled = true,
-				IsAntialiasedLineEnabled = false,
-				IsMultisampleEnabled = false,
-				IsScissorEnabled = false
+				DepthBiasClamp = ViewPort.MaxDepth,
+				IsDepthClipEnabled = DepthClip,
+				IsAntialiasedLineEnabled = Antialiased,
+				IsMultisampleEnabled = Multisampling,
+				IsScissorEnabled = Scissoring
 			}))
 				DeviceContext.Rasterizer.State = rasterizerState;
 
-			ProjectionMatrix = Functions.CreateProjectionSpace(Width / Height, 0.1f, ushort.MaxValue);
-			ViewMatrix = Matrix.LookAtLH(position, lookAt, up);
-
-			DeviceContext.ClearDepthStencilView(depthStencilView, 
+			ProjectionMatrix = Functions.CreateProjectionSpace(Width / Height, 0.1f, Plate.MapSize.Z);
+			ViewMatrix = Matrix.LookAtLH(Position, lookAt, up);
+			WorldMatrix = Matrix.Multiply(ViewMatrix, ProjectionMatrix);
+			DeviceContext.ClearDepthStencilView(depthStencilView,
 				DepthStencilClearFlags.Depth | DepthStencilClearFlags.Stencil, 1.0f, 0);
-			DeviceContext.ClearRenderTargetView(renderview, clearcolor);
+
+			DeviceContext.ClearRenderTargetView(RenderView, ClearColor);
 
 			floor.Render();
 		}
@@ -468,9 +512,9 @@ namespace Sandbox.Engine.Graphics
 		public void Update()
 		{
 			DeviceContext.Rasterizer.SetViewport(ViewPort);
-			lookAt.X = (float)Math.Sin(rotation.Y) + position.X;
-			lookAt.Z = (float)Math.Cos(rotation.Y) + position.Z;
-			lookAt.Y = position.Y - rotation.X;
+			lookAt.X = (float)Math.Sin(Rotation.Y) + Position.X;
+			lookAt.Z = (float)Math.Cos(Rotation.Y) + Position.Z;
+			lookAt.Y = Position.Y - Rotation.X;
 		}
 
 		public void MouseInput(int button, int pressed)
@@ -478,12 +522,8 @@ namespace Sandbox.Engine.Graphics
 			switch (button)
 			{
 				case 12:        // left
-					if (pressed != 0)
-						position.Y += movespeed - turnspeed; // fly up
 					break;
 				case 13:        // right
-					if (pressed != 0)
-						position.Y -= movespeed - turnspeed;  // fly down;
 					break;
 				case 14:        // middle
 					MiddleMousePressed = pressed != 0;
@@ -493,21 +533,161 @@ namespace Sandbox.Engine.Graphics
 			}
 		}
 
+		/// <summary>
+		/// MouseInput for Cursor position
+		/// </summary>
+		/// <param name="x">Position X</param>
+		/// <param name="y">Position Y</param>
 		public void MouseInput(float x, float y)
-		{
-			rotation.Y -= x * 0.001f;
-
-			rotation.X -= y * 0.001f;
-		}
+			=> CursorPosition = new Vector2(x, y);
 
 		public void MouseInput(float delta)
 		{
-			position.Y += (float)(delta / movespeed / Math.PI);
+			if (DeviceContext == null)
+				return;
+
+			if (LeftShiftKeyPressed)
+				Rotation.X += (float)Math.Sin((delta / turnspeed) / (float)Math.PI);
+			else
+			{
+				if (Position.Y > Plate.MapSize.W)
+				{
+					if (Position.Y < Plate.MapSize.Z)
+						Position.Y -= (float)(delta / movespeed / Math.PI);
+					else
+						Position.Y = Plate.MapSize.Z - 0.1f;
+				}
+				else
+					Position.Y = Plate.MapSize.W + 0.1f;
+			}
+		}
+
+		public static void KeyboardKeyPressed(Key key)
+		{
+			switch (key)
+			{
+				case Key.W:                        // W
+				case Key.Up:                        // Up
+					if (Position.X < Plate.MapSize.X && Position.X > 0.1f)
+						Position.X += movespeed * (float)Math.Sin(Rotation.Y);
+					else
+						Position.X = (Position.X < Plate.MapSize.X) ? 0.2f : Plate.MapSize.X - 0.2f;
+
+					if (Position.Z < Plate.MapSize.Y && Position.Z > 0.1f)
+						Position.Z += movespeed * (float)Math.Cos(Rotation.Y);
+					else
+						Position.Z = (Position.Z < Plate.MapSize.Y) ? 0.2f : Plate.MapSize.Y - 0.2f;
+					break;
+				case Key.S:                        // S
+				case Key.Down:
+					if (Position.X > 0.1f && Position.X < Plate.MapSize.X)
+						Position.X -= movespeed * (float)Math.Sin(Rotation.Y);
+					else
+						Position.X = (Position.X < Plate.MapSize.X) ? 0.2f : Plate.MapSize.X - 0.2f;
+
+					if (Position.Z > 0.1f && Position.Z < Plate.MapSize.Y)
+						Position.Z -= movespeed * (float)Math.Cos(Rotation.Y);
+					else
+						Position.Z = (Position.Z < Plate.MapSize.Y) ? 0.2f : Plate.MapSize.Y - 0.2f;
+					break;
+				case Key.A:                        // A
+				case Key.Left:                        // Left
+					if (Position.X < Plate.MapSize.X && Position.X > 0.1f)
+						Position.X -= movespeed * (float)Math.Sin(Rotation.Y + Math.PI / 2);
+					else
+						Position.X = (Position.X < Plate.MapSize.X) ? 0.2f : Plate.MapSize.X - 0.2f;
+
+					if (Position.Z < Plate.MapSize.Y && Position.Z > 0.1f)
+						Position.Z -= movespeed * (float)Math.Cos(Rotation.Y + Math.PI / 2);
+					else
+						Position.Z = (Position.Z < Plate.MapSize.Y) ? 0.2f : Plate.MapSize.Y - 0.2f;
+					break;
+				case Key.D:                        // D
+				case Key.Right:                        // Right
+					if (Position.X < Plate.MapSize.X && Position.X > 0.1f)
+						Position.X += movespeed * (float)Math.Sin(Rotation.Y + Math.PI / 2);
+					else
+						Position.X = (Position.X < Plate.MapSize.X) ? 0.2f : Plate.MapSize.X - 0.2f;
+
+					if (Position.Z < Plate.MapSize.Y && Position.Z > 0.1f)
+						Position.Z += movespeed * (float)Math.Cos(Rotation.Y + Math.PI / 2);
+					else
+						Position.Z = (Position.Z < Plate.MapSize.Y) ? 0.2f : Plate.MapSize.Y - 0.2f;
+					break;
+				case Key.Q:
+					Rotation.Y -= turnspeed;    // Q
+					break;
+				case Key.E:
+					Rotation.Y += turnspeed;    // E
+					break;
+				case Key.Y:
+					Rotation.X -= turnspeed;    // Y
+					break;
+				case Key.X:
+					Rotation.X += turnspeed;    // X
+					break;
+				case Key.LeftShift:
+					LeftShiftKeyPressed = true;
+					break;
+				case Key.F9:
+					switch (FillMode)
+					{
+						case FillMode.Wireframe:
+							FillMode = SharpDX.Direct3D11.FillMode.Solid;
+							Antialiased = true;
+							break;
+						case FillMode.Solid:
+							FillMode = SharpDX.Direct3D11.FillMode.Wireframe;
+							Antialiased = false;
+							break;
+						default:
+							break;
+					}
+					break;
+				case Key.F11:
+					switch (Culling)
+					{
+						case CullMode.Back:
+							Culling = CullMode.Front;
+							break;
+						case CullMode.Front:
+							Culling = CullMode.None;
+							break;
+						case CullMode.None:
+							Culling = CullMode.Back;
+							break;
+					}
+					break;
+				case Key.F8:
+					Antialiased = Antialiased ? false : true;
+					break;
+				case Key.F7:
+					Multisampling = Multisampling ? false : true;
+					break;
+				case Key.F6:
+					Scissoring = Scissoring ? false : true;
+					break;
+				case Key.F5:
+					DepthClip = DepthClip ? false : true;
+					break;
+				default:
+					break;
+			}
+		}
+
+		public static void KeyboardKeyReleased(Key key)
+		{
+			switch (key)
+			{
+				case Key.LeftShift:
+					LeftShiftKeyPressed = false;
+					break;
+			}
 		}
 
 		public void Dispose()
 		{
-			renderview.Dispose();
+			RenderView.Dispose();
 			DeviceContext.ClearState();
 			DeviceContext.Flush();
 			GraphicDevice.Dispose();
@@ -525,80 +705,90 @@ namespace Sandbox.Engine.Graphics
 			{
 				case WindowEvent.WM_PAINT:
 					BeginPaint(hWnd, ref ps);
+
 					EndPaint(hWnd, ref ps);
 					break;
 				case WindowEvent.WM_DESTROY:
 				case WindowEvent.WM_CLOSE:
+					SwapChain.SetFullscreenState(false, null);
+					CloseRequested?.Invoke(null, new EventArgs());
 					DestroyWindow(hWnd);
 					PostQuitMessage();
-					break;
-				case WindowEvent.WM_MOUSEMOVE:
-					if (DeviceContext == null)
-						break;
-					break;
-				case WindowEvent.WM_KEYUP:
-					if (DeviceContext == null)
-						break;
-					break;
-				case WindowEvent.WM_KEYDOWN:
-					if (DeviceContext == null)
-						break;
-
-					switch (wParam.ToInt32())
-					{
-						case 87:                        // W
-						case 38:                        // Up
-							position.X += movespeed * (float)Math.Sin(rotation.Y);
-							position.Z += movespeed * (float)Math.Cos(rotation.Y);
-							break;
-						case 83:                        // S
-						case 40:                        // Down
-							position.X -= movespeed * (float)Math.Sin(rotation.Y);
-							position.Z -= movespeed * (float)Math.Cos(rotation.Y);
-							break;
-						case 65:                        // A
-						case 37:                        // Left
-							position.X -= movespeed * (float)Math.Sin(rotation.Y + Math.PI / 2);
-							position.Z -= movespeed * (float)Math.Cos(rotation.Y + Math.PI / 2);
-							break;
-						case 68:                        // D
-						case 39:                        // Right
-							position.X += movespeed * (float)Math.Sin(rotation.Y + Math.PI / 2);
-							position.Z += movespeed * (float)Math.Cos(rotation.Y + Math.PI / 2);
-							break;
-						case 81:
-							rotation.Y -= turnspeed;	// Q
-							break;
-						case 69:
-							rotation.Y += turnspeed;	// E
-							break;
-						case 89:
-							rotation.X -= turnspeed;    // Y
-							break;
-						case 88:
-							rotation.X += turnspeed;    // X
-							break;
-						case 120:                       // F9
-							switch (FillMode)
-							{
-								case FillMode.Wireframe:
-									FillMode = SharpDX.Direct3D11.FillMode.Solid;
-									break;
-								case FillMode.Solid:
-									FillMode = SharpDX.Direct3D11.FillMode.Wireframe;
-									break;
-								default:
-									break;
-							}
-							break;
-						default:
-							Console.WriteLine(wParam.ToInt32());
-							break;
-					}
 					break;
 				case WindowEvent.WM_SETTEXT:
 					break;
 				case WindowEvent.WM_SIZE:
+					Resize?.Invoke(null, new EventArgs());
+					break;
+				case WindowEvent.WM_MOUSELEAVE:
+					CursorOverClientArea = false;
+					break;
+				case WindowEvent.WM_MOUSEHOVER:
+					CursorOverClientArea = true;
+					break;
+				case WindowEvent.WM_KEYDOWN:
+					var key = Key.Unknown;
+
+					switch (wParam.ToInt32())
+					{
+						case 87:
+							key = Key.W;
+							break;
+						case 65:
+							key = Key.A;
+							break;
+						case 83:
+							key = Key.S;
+							break;
+						case 68:
+							key = Key.D;
+							break;
+						case 16:
+							key = Key.LeftShift;
+							break;
+						case 81:
+							key = Key.Q;
+							break;
+						case 69:
+							key = Key.E;
+							break;
+						case 122:
+							key = Key.F11;
+							break;
+						case 116:
+							key = Key.F5;
+							break;
+						case 120:
+							key = Key.F9;
+							break;
+						case 119:
+							key = Key.F8;
+							break;
+						case 118:
+							key = Key.F7;
+							break;
+						case 117:
+							key = Key.F6;
+							break;
+						default:
+							break;
+					}
+
+					KeyboardKeyPressed(key);
+					break;
+				case WindowEvent.WM_KEYUP:
+					var _key = Key.Unknown;
+
+					switch (wParam.ToInt32())
+					{
+						case 16:
+							_key = Key.LeftShift;
+							break;
+						default:
+							break;
+					}
+
+					KeyboardKeyReleased(_key);
 					break;
 				default:
 					break;
