@@ -1,16 +1,13 @@
 ﻿using Sandbox.Engine.Models;
 
 using SharpDX;
+using SharpDX.DXGI;
 using SharpDX.Direct3D;
 using SharpDX.Direct3D11;
 using SharpDX.DirectInput;
-using SharpDX.DXGI;
 
 using System;
 using System.Runtime.InteropServices;
-
-using Device = SharpDX.Direct3D11.Device;
-using Device1 = SharpDX.Direct3D11.Device1;
 
 namespace Sandbox.Engine.Graphics
 {

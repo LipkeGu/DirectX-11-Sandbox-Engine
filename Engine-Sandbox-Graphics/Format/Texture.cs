@@ -6,7 +6,6 @@ namespace Sandbox.Engine
 	{
 		public Texture(string filename)
 		{
-			CreateTex2DFromBitmap(filename);
 		}
 	}
 }
