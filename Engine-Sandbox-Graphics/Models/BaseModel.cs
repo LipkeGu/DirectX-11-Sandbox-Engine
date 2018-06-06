@@ -5,6 +5,7 @@ using SharpDX.Direct3D11;
 using SharpDX.DXGI;
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 namespace Sandbox.Engine.Models
 {
@@ -12,7 +13,15 @@ namespace Sandbox.Engine.Models
 	{
 		private static readonly string shaderSource = @"
 			float4x4 worldMatrix;
-			float4 ambientColor;
+
+			cbuffer sunInfo : register(b0)
+			{
+				float4 Suncol;
+				float3 Sunpos;
+				float1 padding;
+				float3 Sundir;
+				float1 padding1;	
+			};
 
 			struct [#PREFIX#]_VS_IN
 			{
@@ -43,19 +52,17 @@ namespace Sandbox.Engine.Models
 
 			[#TYPE#]4 [#PREFIX#]_PS([#PREFIX#]_PS_IN input) : SV_Target
 			{
-				float lightIntensity = 0.4f;
-				float4 color = ambientColor;
+				float4 color = Suncol;
+				float3 direction = Sundir;
+				float1 strength = dot(min(input.pos, input.nrm), normalize(-direction));
 
-				lightIntensity = dot(min(input.pos, input.nrm), normalize(-float3(2.0f, 2.0f, 2.0f)));
-
-				if (lightIntensity > 0.0f)
+				if (strength > 0.0f)
 				{
-					color += (input.col * lightIntensity);
+					color += (input.col * strength);
 				}
 
 				color = color * input.col;
 				color = saturate(color);
-				
 				
 				return color;
 			}";
@@ -70,15 +77,27 @@ namespace Sandbox.Engine.Models
 		public SharpDX.Direct3D11.Buffer TesselBuffer { get; private set; }
 
 		SharpDX.Direct3D11.Buffer cbWorldMatrix;
-		SharpDX.Direct3D11.Buffer cbAmbientColor;
+		SharpDX.Direct3D11.Buffer cbSunInfo;
 
 		public List<Vertex> VertexBufferData { get; set; }
 		public Tessel[] TesselationBufferData { get; private set; }
 
 		public int[] IndexBufferData { get; set; }
 
-		internal BaseModel() {
-		}
+		[StructLayout(LayoutKind.Sequential)]
+		public struct SunInfo
+		{
+			public Vector4 Suncol;
+			public Vector3 Sunpos;
+			float padding;
+			public Vector3 Sundir;
+			float padding1;
+		};
+
+		SunInfo sun = new SunInfo();
+
+		internal BaseModel()
+		{}
 
 		VertexBufferBinding vertexBufferBinding;
 
@@ -96,7 +115,7 @@ namespace Sandbox.Engine.Models
 				IndexBuffer = SharpDX.Direct3D11.Buffer.Create(Video.GraphicDevice, BindFlags.IndexBuffer, IndexBufferData);
 
 			var colorDataStart = 8;
-			
+
 			if (VertexBufferData[0].GetType() == typeof(Vector4))
 			{
 				tmpShaderSource = tmpShaderSource.Replace("[#TYPE#]", "float");
@@ -147,28 +166,28 @@ namespace Sandbox.Engine.Models
 						cbWorldMatrix = new SharpDX.Direct3D11.Buffer(Video.GraphicDevice, Utilities.SizeOf<Matrix>(),
 							ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
 
-
+						cbSunInfo = SharpDX.Direct3D11.Buffer.Create(Video.GraphicDevice, BindFlags.ConstantBuffer,
+							ref sun, Utilities.SizeOf<SunInfo>(), ResourceUsage.Default, CpuAccessFlags.None);
 
 						Video.DeviceContext.InputAssembler.InputLayout = layout;
 					}
 				}
+			}
 
-				using (var pixelShaderByteCode = ShaderBytecode.Compile(tmpShaderSource.Replace("[#PREFIX#]", prefix),
-						string.Concat(prefix.ToUpper(), "_PS"), string.Concat("ps_", version)))
+			using (var pixelShaderByteCode = ShaderBytecode.Compile(tmpShaderSource.Replace("[#PREFIX#]", prefix),
+					string.Concat(prefix.ToUpper(), "_PS"), string.Concat("ps_", version)))
+			{
+				if (pixelShaderByteCode.Bytecode == null)
 				{
-					if (pixelShaderByteCode.Bytecode == null)
-					{
-						Video.MessageBox(string.Format("PixelShader compilation for \"{0}\" failed!", prefix) +
-						"This is mostly related to syntax errors!", "Shader compiler");
+					Video.MessageBox(string.Format("PixelShader compilation for \"{0}\" failed!", prefix) +
+					"This is mostly related to syntax errors!", "Shader compiler");
 
-						return false;
-					}
-
-					PixelShader = new PixelShader(Video.GraphicDevice, pixelShaderByteCode);
-
-					cbAmbientColor = new SharpDX.Direct3D11.Buffer(Video.GraphicDevice, Utilities.SizeOf<Vector4>(),
-						ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
+					return false;
 				}
+
+				PixelShader = new PixelShader(Video.GraphicDevice, pixelShaderByteCode);
+
+			
 			}
 
 			vertexBufferBinding = new VertexBufferBinding(VertexBuffer, Utilities.SizeOf<Vertex>(), 0);
@@ -194,8 +213,6 @@ namespace Sandbox.Engine.Models
 			if (IndexBuffer != null)
 				Video.DeviceContext.InputAssembler.SetIndexBuffer(IndexBuffer, Format.R32_UInt, 0);
 
-			
-
 			var worldMatrix = Video.WorldMatrix;
 			worldMatrix.Transpose();
 
@@ -205,18 +222,21 @@ namespace Sandbox.Engine.Models
 			var projMatrix = Video.ProjectionMatrix;
 			projMatrix.Transpose();
 
-			var lightDirection = new Vector3(1.0f, 4.0f, 2.0f);
-
-
+			sun.Suncol = new Vector4(0.2f, 0.2f, 0.2f, 1.0f);
+			sun.Sundir = Video.LookAt;
+			sun.Sunpos = Video.Position;
+			
 			Video.DeviceContext.UpdateSubresource(ref worldMatrix, cbWorldMatrix);
-			Video.DeviceContext.VertexShader.SetConstantBuffer(0, cbWorldMatrix);
+			Video.DeviceContext.UpdateSubresource(ref sun, cbSunInfo);
 
-			var ambientColor = new Vector4(1.0f, 0.0f, 0.0f, 1.0f);
-			Video.DeviceContext.UpdateSubresource(ref ambientColor, cbAmbientColor);
-			Video.DeviceContext.VertexShader.SetConstantBuffer(1, cbAmbientColor);
-
-			Video.DeviceContext.VertexShader.Set(VertexShader);
 			Video.DeviceContext.PixelShader.Set(PixelShader);
+			Video.DeviceContext.VertexShader.Set(VertexShader);
+			Video.DeviceContext.PixelShader.SetConstantBuffer(0, cbSunInfo);
+
+			
+			Video.DeviceContext.VertexShader.SetConstantBuffer(0, cbSunInfo);
+			Video.DeviceContext.VertexShader.SetConstantBuffer(1, cbWorldMatrix);
+
 			if (IndexBuffer != null)
 				Video.DeviceContext.DrawIndexed(IndexBufferData.Length, 0, 0);
 			else
@@ -235,6 +255,7 @@ namespace Sandbox.Engine.Models
 			PixelShader.Dispose();
 
 			cbWorldMatrix.Dispose();
+			cbSunInfo.Dispose();
 		}
 	}
 }

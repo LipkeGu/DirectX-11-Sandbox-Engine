@@ -302,7 +302,7 @@ namespace Sandbox.Engine.Graphics
 		public static int Width;
 		public static int Height;
 		public static Viewport ViewPort { get; private set; }
-		public static Color ClearColor { get; set; } = new Color(0, 0, 0, 1);
+		public static Color ClearColor { get; set; } = new Color(0.2f, 0.2f, 0.2f, 1);
 
 		public IntPtr HWnd { get; private set; } = IntPtr.Zero;
 		public static SharpDX.Direct3D11.Device GraphicDevice { get; private set; }
