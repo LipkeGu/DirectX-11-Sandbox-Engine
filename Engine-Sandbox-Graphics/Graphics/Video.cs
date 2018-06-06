@@ -14,7 +14,7 @@ namespace Sandbox.Engine.Graphics
 	public class Video : IDisposable
 	{
 		#region "DLL Imports"
-		
+
 		[DllImport("user32.dll", EntryPoint = "BeginPaint")]
 		public static extern IntPtr BeginPaint([In] IntPtr hWnd, ref PAINTSTRUCT lpPaint);
 
@@ -257,7 +257,7 @@ namespace Sandbox.Engine.Graphics
 		public static Vector2 CursorPosition { get; private set; }
 
 		static Vector3 up = new Vector3(0, 1, 0);
-		static Vector3 lookAt;
+		public static Vector3 LookAt { get; private set; }
 
 		Plate floor;
 
@@ -302,7 +302,7 @@ namespace Sandbox.Engine.Graphics
 		public static int Width;
 		public static int Height;
 		public static Viewport ViewPort { get; private set; }
-		public static Color ClearColor { get; set; } = new Color(96, 96, 96, 1);
+		public static Color ClearColor { get; set; } = new Color(0, 0, 0, 1);
 
 		public IntPtr HWnd { get; private set; } = IntPtr.Zero;
 		public static SharpDX.Direct3D11.Device GraphicDevice { get; private set; }
@@ -490,7 +490,7 @@ namespace Sandbox.Engine.Graphics
 				DeviceContext.Rasterizer.State = rasterizerState;
 
 			ProjectionMatrix = Functions.CreateProjectionSpace(Width / Height, 0.1f, Plate.MapSize.Z);
-			ViewMatrix = Matrix.LookAtLH(Position, lookAt, up);
+			ViewMatrix = Matrix.LookAtLH(Position, LookAt, up);
 			WorldMatrix = Matrix.Multiply(ViewMatrix, ProjectionMatrix);
 			DeviceContext.ClearDepthStencilView(depthStencilView,
 				DepthStencilClearFlags.Depth | DepthStencilClearFlags.Stencil, 1.0f, 0);
@@ -509,9 +509,9 @@ namespace Sandbox.Engine.Graphics
 		public void Update()
 		{
 			DeviceContext.Rasterizer.SetViewport(ViewPort);
-			lookAt.X = (float)Math.Sin(Rotation.Y) + Position.X;
-			lookAt.Z = (float)Math.Cos(Rotation.Y) + Position.Z;
-			lookAt.Y = Position.Y - Rotation.X;
+
+			LookAt = new Vector3((float)Math.Sin(Rotation.Y) + Position.X,
+				Position.Y - Rotation.X,(float)Math.Cos(Rotation.Y) + Position.Z);
 		}
 
 		public void MouseInput(int button, int pressed)

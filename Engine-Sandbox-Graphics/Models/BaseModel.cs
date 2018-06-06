@@ -12,19 +12,20 @@ namespace Sandbox.Engine.Models
 	{
 		private static readonly string shaderSource = @"
 			float4x4 worldMatrix;
+			float4 ambientColor;
 
 			struct [#PREFIX#]_VS_IN
 			{
-				[#TYPE#] pos : [#PREFIX#]_POSITION;
-				[#TYPE#] col : [#PREFIX#]_COLOR;
-				[#TYPE#] nrm : [#PREFIX#]_NORMAL;
+				[#TYPE#]4 pos : [#PREFIX#]_POSITION;
+				[#TYPE#]4 col : [#PREFIX#]_COLOR;
+				[#TYPE#]4 nrm : [#PREFIX#]_NORMAL;
 			};
 
 			struct [#PREFIX#]_PS_IN
 			{
-				[#TYPE#] pos : SV_POSITION;
-				[#TYPE#] col : [#PREFIX#]_COLOR;
-				[#TYPE#] nrm : [#PREFIX#]_NORMAL;
+				[#TYPE#]4 pos : SV_POSITION;
+				[#TYPE#]4 col : [#PREFIX#]_COLOR;
+				[#TYPE#]4 nrm : [#PREFIX#]_NORMAL;
 			};
 
 			[#PREFIX#]_PS_IN [#PREFIX#]_VS([#PREFIX#]_VS_IN input)
@@ -32,17 +33,31 @@ namespace Sandbox.Engine.Models
 				[#PREFIX#]_PS_IN output = ([#PREFIX#]_PS_IN)0;
 				input.pos.w = 1.0f;
 				input.pos.y = round(max(min(input.col.r * 255.0f, input.col.g * 255.0f), -input.col.b * 255.0f) / 15.0f -10.0f);
-
-				output.nrm = input.nrm;
+				
+				output.nrm = normalize(mul(input.nrm, worldMatrix));
 				output.pos = mul(input.pos, worldMatrix);
 				output.col = input.col;
 				
 				return output;
 			}
 
-			[#TYPE#] [#PREFIX#]_PS([#PREFIX#]_PS_IN input) : SV_Target
+			[#TYPE#]4 [#PREFIX#]_PS([#PREFIX#]_PS_IN input) : SV_Target
 			{
-				return input.col;
+				float lightIntensity = 0.4f;
+				float4 color = ambientColor;
+
+				lightIntensity = dot(min(input.pos, input.nrm), normalize(-float3(2.0f, 2.0f, 2.0f)));
+
+				if (lightIntensity > 0.0f)
+				{
+					color += (input.col * lightIntensity);
+				}
+
+				color = color * input.col;
+				color = saturate(color);
+				
+				
+				return color;
 			}";
 
 		public VertexShader VertexShader { get; private set; }
@@ -54,14 +69,16 @@ namespace Sandbox.Engine.Models
 		public SharpDX.Direct3D11.Buffer IndexBuffer { get; private set; }
 		public SharpDX.Direct3D11.Buffer TesselBuffer { get; private set; }
 
-		SharpDX.Direct3D11.Buffer cbworldMatrix;
+		SharpDX.Direct3D11.Buffer cbWorldMatrix;
+		SharpDX.Direct3D11.Buffer cbAmbientColor;
 
 		public List<Vertex> VertexBufferData { get; set; }
 		public Tessel[] TesselationBufferData { get; private set; }
 
 		public int[] IndexBufferData { get; set; }
 
-		internal BaseModel() { }
+		internal BaseModel() {
+		}
 
 		VertexBufferBinding vertexBufferBinding;
 
@@ -82,23 +99,23 @@ namespace Sandbox.Engine.Models
 			
 			if (VertexBufferData[0].GetType() == typeof(Vector4))
 			{
-				tmpShaderSource = tmpShaderSource.Replace("[#TYPE#]", "float4");
+				tmpShaderSource = tmpShaderSource.Replace("[#TYPE#]", "float");
 				colorDataStart = 16;
 			}
 			else if (VertexBufferData[0].GetType() == typeof(Vertex))
 			{
-				tmpShaderSource = tmpShaderSource.Replace("[#TYPE#]", "float4");
+				tmpShaderSource = tmpShaderSource.Replace("[#TYPE#]", "float");
 				colorDataStart = 16;
 			}
 			else if (VertexBufferData[0].GetType() == typeof(Vector3))
 			{
-				tmpShaderSource = tmpShaderSource.Replace("[#TYPE#]", "float3");
+				tmpShaderSource = tmpShaderSource.Replace("[#TYPE#]", "float");
 				colorDataStart = 12;
 			}
 			else if (VertexBufferData[0].GetType() == typeof(Vector2))
 			{
 				colorDataStart = 8;
-				tmpShaderSource = tmpShaderSource.Replace("[#TYPE#]", "float2");
+				tmpShaderSource = tmpShaderSource.Replace("[#TYPE#]", "float");
 			}
 			else
 				throw new Exception("Invalid datatype passed to Shader");
@@ -124,12 +141,13 @@ namespace Sandbox.Engine.Models
 					{
 						new InputElement(string.Concat(prefix.ToUpper(), "_POSITION"), 0, Format.R32G32B32A32_Float, 0, 0),
 						new InputElement(string.Concat(prefix.ToUpper(), "_COLOR"), 0, Format.R32G32B32A32_Float, colorDataStart, 0),
-						new InputElement(string.Concat(prefix.ToUpper(), "_NORMAL"), 0, Format.R32G32B32A32_Float, colorDataStart + 16, 0),
-						new InputElement(string.Concat(prefix.ToUpper(), "_TEXCOORD"),0,Format.R32G32_Float, normalDataStart + 16, 0)
+						new InputElement(string.Concat(prefix.ToUpper(), "_NORMAL"), 0, Format.R32G32B32A32_Float, normalDataStart, 0)
 					}))
 					{
-						cbworldMatrix = new SharpDX.Direct3D11.Buffer(Video.GraphicDevice, Utilities.SizeOf<Matrix>(),
+						cbWorldMatrix = new SharpDX.Direct3D11.Buffer(Video.GraphicDevice, Utilities.SizeOf<Matrix>(),
 							ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
+
+
 
 						Video.DeviceContext.InputAssembler.InputLayout = layout;
 					}
@@ -147,6 +165,9 @@ namespace Sandbox.Engine.Models
 					}
 
 					PixelShader = new PixelShader(Video.GraphicDevice, pixelShaderByteCode);
+
+					cbAmbientColor = new SharpDX.Direct3D11.Buffer(Video.GraphicDevice, Utilities.SizeOf<Vector4>(),
+						ResourceUsage.Default, BindFlags.ConstantBuffer, CpuAccessFlags.None, ResourceOptionFlags.None, 0);
 				}
 			}
 
@@ -173,6 +194,8 @@ namespace Sandbox.Engine.Models
 			if (IndexBuffer != null)
 				Video.DeviceContext.InputAssembler.SetIndexBuffer(IndexBuffer, Format.R32_UInt, 0);
 
+			
+
 			var worldMatrix = Video.WorldMatrix;
 			worldMatrix.Transpose();
 
@@ -182,12 +205,18 @@ namespace Sandbox.Engine.Models
 			var projMatrix = Video.ProjectionMatrix;
 			projMatrix.Transpose();
 
-			Video.DeviceContext.UpdateSubresource(ref worldMatrix, cbworldMatrix);
-			Video.DeviceContext.VertexShader.SetConstantBuffer(0, cbworldMatrix);
+			var lightDirection = new Vector3(1.0f, 4.0f, 2.0f);
+
+
+			Video.DeviceContext.UpdateSubresource(ref worldMatrix, cbWorldMatrix);
+			Video.DeviceContext.VertexShader.SetConstantBuffer(0, cbWorldMatrix);
+
+			var ambientColor = new Vector4(1.0f, 0.0f, 0.0f, 1.0f);
+			Video.DeviceContext.UpdateSubresource(ref ambientColor, cbAmbientColor);
+			Video.DeviceContext.VertexShader.SetConstantBuffer(1, cbAmbientColor);
 
 			Video.DeviceContext.VertexShader.Set(VertexShader);
 			Video.DeviceContext.PixelShader.Set(PixelShader);
-
 			if (IndexBuffer != null)
 				Video.DeviceContext.DrawIndexed(IndexBufferData.Length, 0, 0);
 			else
@@ -205,7 +234,7 @@ namespace Sandbox.Engine.Models
 			VertexShader.Dispose();
 			PixelShader.Dispose();
 
-			cbworldMatrix.Dispose();
+			cbWorldMatrix.Dispose();
 		}
 	}
 }

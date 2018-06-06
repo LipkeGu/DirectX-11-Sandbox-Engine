@@ -22,10 +22,11 @@ namespace Sandbox.Engine.Models
 				{
 					var pixel = bitmap.GetPixel(x, y).ToRGBA();
 
-					var _color = new Color4(pixel.R / 255.0f, pixel.G / 255.0f, pixel.B / 255.0f, pixel.A / 255.0f);
+					var _color = new Color4((float)pixel.R / 255.0f, (float)pixel.G
+						/ 255.0f, (float)pixel.B / 255.0f, (float)pixel.A / 255.0f);
 
 					VertexBufferData.Add(new Vertex(new Vector4(x, 0, y, 1),
-						_color, new Vector4()));
+						_color, _color.ToVector4()));
 				}
 
 			VertexBufferData.TrimExcess();
