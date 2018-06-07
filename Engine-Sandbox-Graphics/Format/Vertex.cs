@@ -16,4 +16,16 @@ namespace Sandbox.Engine
 			Normal = normal;
 		}
 	}
+
+	public struct TexVertex
+	{
+		public Vector4 Position;
+		public Vector2 TexCord;
+
+		public TexVertex(Vector4 pos, Vector2 texcord)
+		{
+			Position = pos;
+			TexCord = texcord;
+		}
+	}
 }

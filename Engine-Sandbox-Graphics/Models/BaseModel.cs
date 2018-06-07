@@ -186,13 +186,9 @@ namespace Sandbox.Engine.Models
 				}
 
 				PixelShader = new PixelShader(Video.GraphicDevice, pixelShaderByteCode);
-
-			
 			}
 
 			vertexBufferBinding = new VertexBufferBinding(VertexBuffer, Utilities.SizeOf<Vertex>(), 0);
-			Video.DeviceContext.InputAssembler.PrimitiveTopology = SharpDX.Direct3D.PrimitiveTopology.TriangleList;
-
 			return true;
 		}
 
@@ -233,7 +229,6 @@ namespace Sandbox.Engine.Models
 			Video.DeviceContext.VertexShader.Set(VertexShader);
 			Video.DeviceContext.PixelShader.SetConstantBuffer(0, cbSunInfo);
 
-			
 			Video.DeviceContext.VertexShader.SetConstantBuffer(0, cbSunInfo);
 			Video.DeviceContext.VertexShader.SetConstantBuffer(1, cbWorldMatrix);
 

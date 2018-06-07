@@ -84,7 +84,6 @@
     <Compile Include="Engine.cs" />
     <Compile Include="Format\Abstract\Element2D.cs" />
     <Compile Include="Format\Tessel.cs" />
-    <Compile Include="Format\Texture.cs" />
     <Compile Include="Format\Triangle.cs" />
     <Compile Include="Format\Vertex.cs" />
     <Compile Include="Functions.cs" />
@@ -97,6 +96,7 @@
     <Compile Include="Input\Mouse\MouseScrollEventArgs.cs" />
     <Compile Include="Models\BaseModel.cs" />
     <Compile Include="Models\Plate.cs" />
+    <Compile Include="Models\Texture.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>

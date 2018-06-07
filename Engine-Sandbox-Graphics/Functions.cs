@@ -43,12 +43,30 @@ namespace Sandbox.Engine
 			var dir = near - far;
 		}
 
-		public static Texture2D LoadTexture(string filename)
+		/// <summary>
+		/// Creates a Texture with 6 Sides for Cubemaps 
+		/// </summary>
+		/// <param name="filename"></param>
+		/// <returns></returns>
+		public static Texture2D CreateCubemapFromFile(string filename, out ShaderResourceView view)
+			=> LoadTexture(filename, out view, 6, ResourceOptionFlags.TextureCube);
+
+		/// <summary>
+		/// Creates a 2D Texture (with MipMaps) from the given file.
+		/// </summary>
+		/// <param name="filename"></param>
+		/// <returns></returns>
+		public static Texture2D CreateTexture(string filename, out ShaderResourceView view)
+			=> LoadTexture(filename, out view, 1, ResourceOptionFlags.GenerateMipMaps);
+
+		private static Texture2D LoadTexture(string filename, out ShaderResourceView view, 
+			int arraySize = 1, ResourceOptionFlags optFlags = ResourceOptionFlags.None)
 		{
 			var bitmap = new Bitmap(filename);
 
 			if (bitmap.PixelFormat != PixelFormat.Format32bppArgb)
-				bitmap = bitmap.Clone(new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height), PixelFormat.Format32bppArgb);
+				bitmap = bitmap.Clone(new System.Drawing.Rectangle(0, 0, bitmap.Width,
+					bitmap.Height), PixelFormat.Format32bppArgb);
 
 			var data = bitmap.LockBits(new System.Drawing.Rectangle(0, 0, 
 				bitmap.Width, bitmap.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
@@ -58,18 +76,20 @@ namespace Sandbox.Engine
 				Width = bitmap.Width,
 				Height = bitmap.Height,
 				ArraySize = 1,
-				BindFlags = BindFlags.ShaderResource,
-				Usage = ResourceUsage.Immutable,
-				CpuAccessFlags = CpuAccessFlags.None,
+				BindFlags = SharpDX.Direct3D11.BindFlags.ShaderResource,
+				Usage = SharpDX.Direct3D11.ResourceUsage.Default,
+				CpuAccessFlags = SharpDX.Direct3D11.CpuAccessFlags.None,
 				Format = SharpDX.DXGI.Format.B8G8R8A8_UNorm,
 				MipLevels = 1,
-				OptionFlags = ResourceOptionFlags.None,
+				OptionFlags = SharpDX.Direct3D11.ResourceOptionFlags.None,
 				SampleDescription = new SharpDX.DXGI.SampleDescription(1, 0),
 			}, new DataRectangle(data.Scan0, data.Stride));
 
 			bitmap.UnlockBits(data);
 			bitmap.Dispose();
 
+			view = new ShaderResourceView(Video.GraphicDevice, ret);
+			
 			return ret;
 		}
 

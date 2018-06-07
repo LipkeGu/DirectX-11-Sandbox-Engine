@@ -304,6 +304,9 @@ namespace Sandbox.Engine.Graphics
 		public static Viewport ViewPort { get; private set; }
 		public static Color ClearColor { get; set; } = new Color(0.2f, 0.2f, 0.2f, 1);
 
+		Texture tex;
+
+
 		public IntPtr HWnd { get; private set; } = IntPtr.Zero;
 		public static SharpDX.Direct3D11.Device GraphicDevice { get; private set; }
 		public static SharpDX.Direct3D11.DeviceContext DeviceContext { get; private set; }
@@ -468,6 +471,7 @@ namespace Sandbox.Engine.Graphics
 			floor = new Plate();
 			Position = new Vector3(Plate.MapSize.X / 2, Plate.MapSize.Z / 2, Plate.MapSize.Y / 2);
 			ShowWindow(HWnd, 1);
+			tex = new Texture("aros.jpg");
 
 			return true;
 		}
@@ -488,7 +492,7 @@ namespace Sandbox.Engine.Graphics
 				IsScissorEnabled = Scissoring
 			}))
 				DeviceContext.Rasterizer.State = rasterizerState;
-
+			Video.DeviceContext.InputAssembler.PrimitiveTopology = SharpDX.Direct3D.PrimitiveTopology.TriangleList;
 			ProjectionMatrix = Functions.CreateProjectionSpace(Width / Height, 0.1f, Plate.MapSize.Z);
 			ViewMatrix = Matrix.LookAtLH(Position, LookAt, up);
 			WorldMatrix = Matrix.Multiply(ViewMatrix, ProjectionMatrix);
@@ -498,6 +502,7 @@ namespace Sandbox.Engine.Graphics
 			DeviceContext.ClearRenderTargetView(RenderView, ClearColor);
 
 			floor.Render();
+			tex.Render();
 		}
 
 		public void EndRender()
@@ -690,7 +695,7 @@ namespace Sandbox.Engine.Graphics
 			GraphicDevice.Dispose();
 			DeviceContext.Dispose();
 			SwapChain.Dispose();
-
+			tex.Dispose();
 			floor.Dispose();
 
 			UnRegisterClass(classname, hInstance);
